@@ -6,14 +6,14 @@ const sortOptions = document.getElementById('sortOptions');
 const filterOptions = document.getElementById('filterOptions');
 // https://www.jsdelivr.com/tools/purge
 const zonesurls = [
-    "https://cdn.jsdelivr.net/%67%68/%67%6e%2d%6d%61%74%68/%61%73%73%65%74%73@%6d%61%69%6e/%7a%6f%6e%65%73%2e%6a%73%6f%6e",
-    "https://cdn.jsdelivr.net/gh/gn-math/assets@latest/zones.json",
-    "https://cdn.jsdelivr.net/gh/gn-math/assets@master/zones.json",
-    "https://cdn.jsdelivr.net/gh/gn-math/assets/zones.json"
+    "https://cdn.jsdelivr.net/gh/%67%6e%2d%6d%61%74%68/assets@main/zones.json",
+    "https://cdn.jsdelivr.net/gh/%67%6e%2d%6d%61%74%68/assets@latest/zones.json",
+    "https://cdn.jsdelivr.net/gh/%67%6e%2d%6d%61%74%68/assets@master/zones.json",
+    "https://cdn.jsdelivr.net/gh/%67%6e%2d%6d%61%74%68/assets/zones.json"
 ];
 let zonesURL = zonesurls[Math.floor(Math.random() * zonesurls.length)];
-const coverURL = "https://cdn.jsdelivr.net/gh/gn-math/covers@main";
-const htmlURL = "https://cdn.jsdelivr.net/gh/gn-math/html@main";
+const coverURL = "https://cdn.jsdelivr.net/gh/%67%6e%2d%6d%61%74%68/covers@main";
+const htmlURL = "https://cdn.jsdelivr.net/gh/%67%6e%2d%6d%61%74%68/html@main";
 let zones = [];
 let popularityData = {};
 const featuredContainer = document.getElementById('featuredZones');
@@ -29,22 +29,22 @@ async function listZones() {
       let shajson;
       let sha;
         try {
-          sharesponse = await fetch("https://api.github.com/repos/gn-math/assets/commits?t="+Date.now());
+          sharesponse = await fetch("https://api.github.com/repos/%67%6e%2d%6d%61%74%68/assets/commits?t="+Date.now());
         } catch (error) {}
         if (sharesponse && sharesponse.status === 200) {
           try {
             shajson = await sharesponse.json();
             sha = shajson[0]['sha'];
             if (sha) {
-                zonesURL = `https://cdn.jsdelivr.net/gh/gn-math/assets@${sha}/zones.json`;
+                zonesURL = `https://cdn.jsdelivr.net/gh/%67%6e%2d%6d%61%74%68/assets@${sha}/zones.json`;
             }
           } catch (error) {
             try {
-                let secondarysharesponse = await fetch("https://raw.githubusercontent.com/gn-math/xml/refs/heads/main/sha.txt?t="+Date.now());
+                let secondarysharesponse = await fetch("https://raw.githubusercontent.com/%67%6e%2d%6d%61%74%68/xml/refs/heads/main/sha.txt?t="+Date.now());
                 if (secondarysharesponse && secondarysharesponse.status === 200) {
                     sha = (await secondarysharesponse.text()).trim();
                     if (sha) {
-                        zonesURL = `https://cdn.jsdelivr.net/gh/gn-math/assets@${sha}/zones.json`;
+                        zonesURL = `https://cdn.jsdelivr.net/gh/%67%6e%2d%6d%61%74%68/assets@${sha}/zones.json`;
                     }
                 }
             } catch(error) {}
@@ -54,7 +54,7 @@ async function listZones() {
         const json = await response.json();
         zones = json;
         zones[0].featured = true; // always gonna be the discord
-        await fetchPopularity();
+        await Promise.all([fetchPopularity("year"), fetchPopularity("month"), fetchPopularity("week"), fetchPopularity("day")]);
         sortZones();
         try {
         const search = new URLSearchParams(window.location.search);
@@ -82,7 +82,7 @@ async function listZones() {
                             popup.style.boxShadow = "0px 0px 10px rgba(0,0,0,0.1)";
                             popup.style.fontFamily = "Arial, sans-serif";
                             
-                            popup.innerHTML = `Play more games at <a href="https://gn-math.github.io" target="_blank" style="color:#004085; font-weight:bold;">https://gn-math.github.io</a>!`;
+                            popup.innerHTML = `Play more games at <a href="https://gn-math.dev" target="_blank" style="color:#004085; font-weight:bold;">https://gn-math.dev</a>!`;
                             
                             const closeBtn = document.createElement("button");
                             closeBtn.innerText = "?";
@@ -138,21 +138,30 @@ async function listZones() {
         container.innerHTML = `Error loading zones: ${error}`;
     }
 }
-async function fetchPopularity() {
+async function fetchPopularity(duration) {
     try {
-        const response = await fetch("https://data.jsdelivr.com/v1/stats/packages/gh/gn-math/html@main/files?period=year");
+        if (!popularityData[duration]) {
+            popularityData[duration] = {};
+        }
+        const response = await fetch(
+            "https://data.jsdelivr.com/v1/stats/packages/gh/%67%6e%2d%6d%61%74%68/html@main/files?period=" + duration
+        );
         const data = await response.json();
         data.forEach(file => {
             const idMatch = file.name.match(/\/(\d+)\.html$/);
             if (idMatch) {
                 const id = parseInt(idMatch[1]);
-                popularityData[id] = file.hits.total;
+                popularityData[duration][id] = file.hits?.total ?? 0;
             }
         });
     } catch (error) {
-        popularityData[0] = 0;
+        if (!popularityData[duration]) {
+            popularityData[duration] = {};
+        }
+        popularityData[duration][0] = 0;
     }
 }
+
 
 function sortZones() {
     const sortBy = sortOptions.value;
@@ -161,7 +170,13 @@ function sortZones() {
     } else if (sortBy === 'id') {
         zones.sort((a, b) => a.id - b.id);
     } else if (sortBy === 'popular') {
-        zones.sort((a, b) => (popularityData[b.id] || 0) - (popularityData[a.id] || 0));
+        zones.sort((a, b) => ((popularityData['year']?.[b.id]) ?? 0) - ((popularityData['year']?.[a.id]) ?? 0));
+    } else if (sortBy === 'trendingMonth') {
+        zones.sort((a, b) => ((popularityData['month']?.[b.id]) ?? 0) - ((popularityData['month']?.[a.id]) ?? 0));
+    } else if (sortBy === 'trendingWeek') {
+        zones.sort((a, b) => ((popularityData['week']?.[b.id]) ?? 0) - ((popularityData['week']?.[a.id]) ?? 0));
+    } else if (sortBy === 'trendingDay') {
+        zones.sort((a, b) => ((popularityData['day']?.[b.id]) ?? 0) - ((popularityData['day']?.[a.id]) ?? 0));
     }
     zones.sort((a, b) => (a.id === -1 ? -1 : b.id === -1 ? 1 : 0));
     if (featuredContainer.innerHTML === "") {
@@ -625,6 +640,7 @@ settings.addEventListener('click', () => {
     document.getElementById('popupOverlay').style.display = "flex";
 });
 
+
 function showContact() {
     document.getElementById('popupTitle').textContent = "Contact";
     const popupBody = document.getElementById('popupBody');
@@ -641,10 +657,10 @@ function loadPrivacy() {
     popupBody.innerHTML = `
         <div style="max-height: 60vh; overflow-y: auto;">
             <h2>PRIVACY POLICY</h2>
-            <p>Last updated April 17, 2025</p>
+            <p>Last updated Feburary 20, 2026</p>
             <p>This Privacy Notice for gn-math ("we," "us," or "our"), describes how and why we might access, collect, store, use, and/or share ("process") your personal information when you use our services ("Services"), including when you:</p>
             <ul>
-                <li>Visit our website at <a href="https://gn-math.github.io">https://gn-math.github.io</a>, or any website of ours that links to this Privacy Notice</li>
+                <li>Visit our website at <a href="https://gn-math.dev">https://gn-math.dev</a>, or any website of ours that links to this Privacy Notice</li>
                 <li>Engage with us in other related ways, including any sales, marketing, or events</li>
             </ul>
             <p>Questions or concerns? Reading this Privacy Notice will help you understand your privacy rights and choices. We are responsible for making decisions about how your personal information is processed. If you do not agree with our policies and practices, please do not use our Services. If you still have any questions or concerns, please contact us at <a href="https://discord.gg/NAFw4ykZ7n">https://discord.gg/NAFw4ykZ7n</a>.</p>
@@ -713,7 +729,7 @@ async function getAllStats() {
   }
 
   const BASE_URL =
-    "https://data.jsdelivr.com/v1/stats/packages/gh/gn-math/html@main/files";
+    "https://data.jsdelivr.com/v1/stats/packages/gh/%67%6e%2d%6d%61%74%68/html@main/files";
   const PERIOD = "year";
   const PAGE_BATCH = 5;
 
@@ -778,7 +794,7 @@ function showZoneInfo() {
     popupBody.innerHTML = `<p>Loading...</p>`
     popupBody.contentEditable = false;
     document.getElementById('popupOverlay').style.display = "flex";
-    fetch(`https://api.github.com/repos/gn-math/html/commits?path=${id}.html`).then(res => res.json()).then(async json => {
+    fetch(`https://api.github.com/repos/%67%6e%2d%6d%61%74%68/html/commits?path=${id}.html`).then(res => res.json()).then(async json => {
         let stats = await getStats (id);
         idjson = zones.filter(a=>a.id===id)[0]
         document.getElementById('popupTitle').textContent = `${idjson.name} Info`;
@@ -809,33 +825,6 @@ function closePopup() {
     document.getElementById('popupOverlay').style.display = "none";
 }
 listZones();
-
-const schoolList = ["deledao", "goguardian", "lightspeed", "linewize", "securly", ".edu/"];
-
-function isBlockedDomain(url) {
-    try {
-    const domain = new URL(url, location.origin).hostname + "/";
-    return schoolList.some(school => domain.includes(school));
-    } catch(error){return false;}
-}
-
-const originalFetch = window.fetch;
-window.fetch = function (url, options) {
-    if (isBlockedDomain(url)) {
-        console.warn(`lam`);
-        return Promise.reject(new Error("lam"));
-    }
-    return originalFetch.apply(this, arguments);
-};
-
-const originalOpen = XMLHttpRequest.prototype.open;
-XMLHttpRequest.prototype.open = function (method, url) {
-    if (isBlockedDomain(url)) {
-        console.warn(`lam`);
-        return;
-    }
-    return originalOpen.apply(this, arguments);
-};
 
 HTMLCanvasElement.prototype.toDataURL = function (...args) {
     return "";
